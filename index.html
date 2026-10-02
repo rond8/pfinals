@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Community Poll</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #f2f5f7; --card: #ffffff; --ink: #14213d; --muted: #5b6678;
+    --line: #d6dde5; --pick: #0f8b8d; --pick-soft: #d9f0f0; --accent: #f2a900;
+    --err: #b3261e;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --paper: #0e1626; --card: #16233b; --ink: #eef2f7; --muted: #9aa8bd;
+      --line: #2a3a58; --pick: #3cc3c5; --pick-soft: #12414a; --accent: #f2b82e; --err: #ff8a80; }
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--paper); }
+  body { margin: 0; color: var(--ink); background: var(--paper);
+    font-family: "Bricolage Grotesque", system-ui, -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.45; padding: 0 16px 120px; }
+  main { max-width: 680px; margin: 0 auto; }
+  header { padding: 40px 0 20px; }
+  h1 { font-size: clamp(2rem, 7vw, 3rem); font-weight: 800; letter-spacing: -0.02em; margin: 0 0 8px; line-height: 1.05; }
+  header p { margin: 0; color: var(--muted); max-width: 52ch; }
+  .topic { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 18px; margin: 16px 0; }
+  .topic-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 12px; }
+  .topic h2 { font-size: 1.15rem; font-weight: 600; margin: 0; }
+  .count { font-size: .85rem; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .count.full { color: var(--pick); font-weight: 600; }
+  .opt { position: relative; display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+    font: inherit; color: inherit; background: transparent; border: 1.5px solid var(--line);
+    border-radius: 10px; padding: 12px 14px; margin: 8px 0 0; cursor: pointer; overflow: hidden; min-height: 48px; }
+  .opt:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .opt .bar { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--pick-soft); transition: width .5s ease; z-index: 0; }
+  .opt > *:not(.bar) { position: relative; z-index: 1; }
+  .box { flex: none; width: 20px; height: 20px; border: 2px solid var(--muted); border-radius: 6px; display: grid; place-items: center; }
+  .opt[aria-pressed="true"] { border-color: var(--pick); }
+  .opt[aria-pressed="true"] .box { background: var(--pick); border-color: var(--pick); }
+  .opt[aria-pressed="true"] .box::after { content: ""; width: 5px; height: 10px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg) translate(-1px,-1px); }
+  .opt:disabled { opacity: .45; cursor: not-allowed; }
+  .name { flex: 1; }
+  .pct { font-variant-numeric: tabular-nums; color: var(--muted); font-size: .9rem; }
+  .bar-wrap { display: none; }
+  .results .pct { display: inline; }
+  .pct { display: none; }
+  .results .pct { display: inline; }
+  .bottom { position: fixed; left: 0; right: 0; bottom: 0; background: var(--card); border-top: 1px solid var(--line);
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px)); }
+  .bottom-in { max-width: 680px; margin: 0 auto; display: flex; gap: 10px; align-items: center; }
+  .status { flex: 1; font-size: .9rem; color: var(--muted); min-height: 1.2em; }
+  .status.err { color: var(--err); }
+  button.btn { font: inherit; font-weight: 600; border-radius: 10px; padding: 12px 18px; cursor: pointer; min-height: 48px; border: 1.5px solid var(--ink); }
+  button.primary { background: var(--ink); color: var(--paper); }
+  button.ghost { background: transparent; color: var(--ink); }
+  button.btn:disabled { opacity: .5; cursor: wait; }
+  button.btn:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .msg { text-align: center; color: var(--muted); padding: 40px 0; }
+  .setup { background: var(--card); border: 1.5px dashed var(--accent); border-radius: 12px; padding: 16px; }
+  @media (prefers-reduced-motion: reduce) { .opt .bar { transition: none; } }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Cast your votes</h1>
+    <p>Pick up to 3 options for each topic. You can change your answers any time by voting again.</p>
+  </header>
+  <div id="app" class="msg">Loading poll…</div>
+</main>
+
+<div class="bottom" id="bottom" hidden>
+  <div class="bottom-in">
+    <div class="status" id="status" role="status" aria-live="polite"></div>
+    <button class="btn ghost" id="toggle">See results</button>
+    <button class="btn primary" id="submit">Submit votes</button>
+  </div>
+</div>
+
+<script>
+// 1) Paste your deployed Apps Script web app URL here (ends in /exec)
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxpL4JCHJseIstQLeGkZv3cOKa773GjDqYizbI8L7r7CW3uMK0CgHTOd-WjwZXJf3b4/exec";
+
+// 2) Topics and options live here. Edit them to change the poll.
+const TOPICS = [
+  {
+    "topic": "Parallel Computing projects",
+    "options": [
+      "Parallel Student Grade Calculator",
+      "Parallel File Search System",
+      "Parallel Matrix Addition and Multiplication System",
+      "Parallel Image File Information Processor",
+      "Parallel Number Sorting System",
+      "Parallel Text Word Counter",
+      "Parallel Prime Number Finder",
+      "Parallel Student Record Processing System",
+      "Parallel File Compression Simulation",
+      "Parallel Data Statistics Calculator",
+      "Parallel Exam Result Processor",
+      "Parallel Password Strength Checker for Demonstration",
+      "Parallel File Duplicate Finder",
+      "Parallel Sales Data Processor",
+      "Parallel Log File Analyzer"
+    ]
+  },
+  {
+    "topic": "Distributed Computing projects",
+    "options": [
+      "Distributed Student Attendance Monitoring System",
+      "Distributed Quiz System",
+      "Distributed Library Book Borrowing System",
+      "Distributed Classroom Announcement System",
+      "Distributed Inventory Management System",
+      "Distributed File Sharing System",
+      "Distributed School Information Inquiry System",
+      "Distributed Voting System for Classroom Elections",
+      "Distributed Computer Laboratory Reservation System",
+      "Distributed Chat Application",
+      "Distributed Barangay Information System",
+      "Distributed Lost and Found Management System",
+      "Distributed Task Assignment System",
+      "Distributed Queue Management System",
+      "Distributed Campus Event Registration System"
+    ]
+  }
+];
+
+const app = document.getElementById("app");
+const statusEl = document.getElementById("status");
+const submitBtn = document.getElementById("submit");
+const toggleBtn = document.getElementById("toggle");
+const bottom = document.getElementById("bottom");
+
+let poll = null;
+let picks = {};          // topic -> array of option names
+let showResults = false;
+
+function getVoterId() {
+  try {
+    let id = localStorage.getItem("poll_voter_id");
+    if (!id) {
+      id = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2));
+      localStorage.setItem("poll_voter_id", id);
+    }
+    return id;
+  } catch (e) { return "anon-" + Math.random().toString(16).slice(2); }
+}
+const voterId = getVoterId();
+
+function setStatus(text, isErr) {
+  statusEl.textContent = text || "";
+  statusEl.classList.toggle("err", !!isErr);
+}
+
+async function load() {
+  if (SCRIPT_URL.indexOf("PASTE_") === 0) {
+    app.className = "";
+    app.innerHTML = '<div class="setup"><strong>Almost there.</strong> Deploy <code>Code.gs</code> as a web app and paste its URL into <code>SCRIPT_URL</code> at the top of this file\'s script.</div>';
+    return;
+  }
+  try {
+    const res = await fetch(SCRIPT_URL + "?voterId=" + encodeURIComponent(voterId));
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    poll = data;
+    picks = {};
+    TOPICS.forEach(t => { picks[t.topic] = (poll.mine[t.topic] || []).slice(); });
+    showResults = Object.keys(poll.mine).length > 0;
+    app.className = "";
+    bottom.hidden = false;
+    render();
+  } catch (err) {
+    app.className = "msg";
+    app.textContent = "Couldn't load the poll. Check your connection and reload.";
+  }
+}
+
+function render() {
+  app.innerHTML = "";
+  app.classList.toggle("results", showResults);
+  toggleBtn.textContent = showResults ? "Hide results" : "See results";
+
+  TOPICS.forEach(t => {
+    const sel = picks[t.topic];
+    const full = sel.length >= poll.max;
+    const sec = document.createElement("section");
+    sec.className = "topic";
+
+    const head = document.createElement("div");
+    head.className = "topic-head";
+    const h = document.createElement("h2");
+    h.textContent = t.topic;
+    const c = document.createElement("span");
+    c.className = "count" + (full ? " full" : "");
+    c.textContent = sel.length + " of " + poll.max + " chosen";
+    head.append(h, c);
+    sec.append(head);
+
+    t.options.forEach(name => {
+      const o = { name: name, count: (poll.counts[t.topic] || {})[name] || 0 };
+      const on = sel.indexOf(o.name) !== -1;
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "opt";
+      b.setAttribute("aria-pressed", on);
+      b.disabled = full && !on;
+
+      const bar = document.createElement("span");
+      bar.className = "bar";
+      const voters = poll.voters[t.topic] || 0;
+      const pct = voters ? Math.round((o.count / voters) * 100) : 0;
+      if (showResults) bar.style.width = pct + "%";
+
+      const box = document.createElement("span");
+      box.className = "box";
+      const label = document.createElement("span");
+      label.className = "name";
+      label.textContent = o.name;
+      const p = document.createElement("span");
+      p.className = "pct";
+      p.textContent = pct + "% · " + o.count;
+
+      b.append(bar, box, label, p);
+      b.addEventListener("click", () => toggle(t.topic, o.name));
+      sec.append(b);
+    });
+    app.append(sec);
+  });
+}
+
+function toggle(topic, option) {
+  const sel = picks[topic];
+  const i = sel.indexOf(option);
+  if (i !== -1) sel.splice(i, 1);
+  else if (sel.length < poll.max) sel.push(option);
+  setStatus("");
+  render();
+}
+
+toggleBtn.addEventListener("click", () => { showResults = !showResults; render(); });
+
+submitBtn.addEventListener("click", async () => {
+  const votes = {};
+  Object.keys(picks).forEach(t => {
+    const had = (poll.mine[t] || []).length > 0;
+    if (picks[t].length || had) votes[t] = picks[t];
+  });
+  if (!Object.keys(votes).length) { setStatus("Pick at least one option first.", true); return; }
+
+  submitBtn.disabled = true;
+  setStatus("Saving your votes…");
+  try {
+    const res = await fetch(SCRIPT_URL, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },  // avoids CORS preflight
+      body: JSON.stringify({ voterId, votes })
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    poll = data;
+    showResults = true;
+    render();
+    setStatus("Votes saved. Thanks!");
+  } catch (err) {
+    setStatus(err.message || "Couldn't save. Try again.", true);
+  } finally {
+    submitBtn.disabled = false;
+  }
+});
+
+load();
+</script>
+</body>
+</html>
