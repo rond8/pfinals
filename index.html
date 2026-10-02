@@ -34,20 +34,13 @@
     font: inherit; color: inherit; background: transparent; border: 1.5px solid var(--line);
     border-radius: 10px; padding: 12px 14px; margin: 8px 0 0; cursor: pointer; overflow: hidden; min-height: 48px; }
   .opt:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
-  .opt .bar { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--pick-soft); transition: width .5s ease; z-index: 0; }
-  .opt > *:not(.bar) { position: relative; z-index: 1; }
   .box { flex: none; width: 20px; height: 20px; border: 2px solid var(--muted); border-radius: 6px; display: grid; place-items: center; }
   .opt[aria-pressed="true"] { border-color: var(--pick); }
   .opt[aria-pressed="true"] .box { background: var(--pick); border-color: var(--pick); }
   .opt[aria-pressed="true"] .box::after { content: ""; width: 5px; height: 10px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg) translate(-1px,-1px); }
   .opt:disabled { opacity: .45; cursor: not-allowed; }
   .name { flex: 1; }
-  .pct { font-variant-numeric: tabular-nums; color: var(--muted); font-size: .9rem; }
-  .bar-wrap { display: none; }
-  .results .pct { display: inline; }
-  .pct { display: none; }
-  .results .pct { display: inline; }
-  .bottom { position: fixed; left: 0; right: 0; bottom: 0; background: var(--card); border-top: 1px solid var(--line);
+    .bottom { position: fixed; left: 0; right: 0; bottom: 0; background: var(--card); border-top: 1px solid var(--line);
     padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px)); }
   .bottom-in { max-width: 680px; margin: 0 auto; display: flex; gap: 10px; align-items: center; }
   .status { flex: 1; font-size: .9rem; color: var(--muted); min-height: 1.2em; }
@@ -59,14 +52,39 @@
   button.btn:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
   .msg { text-align: center; color: var(--muted); padding: 40px 0; }
   .setup { background: var(--card); border: 1.5px dashed var(--accent); border-radius: 12px; padding: 16px; }
-  @media (prefers-reduced-motion: reduce) { .opt .bar { transition: none; } }
+  
+  /* ---------- Results view ---------- */
+  .stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin: 4px 0 8px; }
+  .stat { background: var(--ink); color: var(--paper); border-radius: 14px; padding: 16px 18px; }
+  .stat b { display: block; font-size: 2.2rem; font-weight: 800; line-height: 1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+  .stat span { font-size: .85rem; opacity: .8; }
+  .rhead { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 6px; }
+  .rhead small { color: var(--muted); font-size: .85rem; white-space: nowrap; }
+  .row { display: grid; grid-template-columns: 34px 1fr auto; gap: 4px 12px; align-items: center; padding: 11px 0; border-top: 1px solid var(--line); }
+  .row:first-of-type { border-top: 0; }
+  .rank { grid-row: 1 / span 2; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center;
+    font-weight: 800; font-size: .95rem; background: var(--paper); color: var(--muted); font-variant-numeric: tabular-nums; }
+  .row.r1 .rank { background: var(--accent); color: #14213d; }
+  .row.r2 .rank, .row.r3 .rank { background: var(--pick-soft); color: var(--pick); }
+  .rname { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+  .you { display: inline-block; margin-left: 8px; font-size: .72rem; font-weight: 600; color: var(--pick);
+    border: 1.5px solid var(--pick); border-radius: 99px; padding: 1px 8px; vertical-align: 2px; white-space: nowrap; }
+  .rnum { text-align: right; font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .rnum b { font-size: 1.15rem; font-weight: 800; }
+  .rnum span { display: block; font-size: .75rem; color: var(--muted); }
+  .track { grid-column: 2 / span 2; height: 10px; border-radius: 99px; background: var(--paper); overflow: hidden; }
+  .fill { height: 100%; width: 0; border-radius: 99px; background: var(--pick); transition: width .7s cubic-bezier(.2,.8,.2,1); }
+  .row.r1 .fill { background: var(--accent); }
+  .row.zero .rname { color: var(--muted); font-weight: 400; }
+  .refresh { font: inherit; font-size: .85rem; color: var(--muted); background: none; border: 0; cursor: pointer; text-decoration: underline; padding: 8px 0; }
+  @media (prefers-reduced-motion: reduce) { .fill { transition: none; } }
 </style>
 </head>
 <body>
 <main>
   <header>
-    <h1>Cast your votes</h1>
-    <p>Pick up to 3 options for each topic. You can change your answers any time by voting again.</p>
+    <h1 id="title">Cast your votes</h1>
+    <p id="subtitle">Pick up to 3 options for each topic. You can change your answers any time by voting again.</p>
   </header>
   <div id="app" class="msg">Loading poll…</div>
 </main>
@@ -178,10 +196,18 @@ async function load() {
 }
 
 function render() {
-  app.innerHTML = "";
-  app.classList.toggle("results", showResults);
-  toggleBtn.textContent = showResults ? "Hide results" : "See results";
+  const results = showResults;
+  document.getElementById("title").textContent = results ? "Results" : "Cast your votes";
+  document.getElementById("subtitle").textContent = results
+    ? "Share of voters who picked each option. Updates automatically."
+    : "Pick up to 3 options for each topic. You can change your answers any time by voting again.";
+  toggleBtn.textContent = results ? "Back to voting" : "See results";
+  submitBtn.hidden = results;
+  if (results) renderResults(); else renderVote();
+}
 
+function renderVote() {
+  app.innerHTML = "";
   TOPICS.forEach(t => {
     const sel = picks[t.topic];
     const full = sel.length >= poll.max;
@@ -199,36 +225,122 @@ function render() {
     sec.append(head);
 
     t.options.forEach(name => {
-      const o = { name: name, count: (poll.counts[t.topic] || {})[name] || 0 };
-      const on = sel.indexOf(o.name) !== -1;
+      const on = sel.indexOf(name) !== -1;
       const b = document.createElement("button");
       b.type = "button";
       b.className = "opt";
       b.setAttribute("aria-pressed", on);
       b.disabled = full && !on;
-
-      const bar = document.createElement("span");
-      bar.className = "bar";
-      const voters = poll.voters[t.topic] || 0;
-      const pct = voters ? Math.round((o.count / voters) * 100) : 0;
-      if (showResults) bar.style.width = pct + "%";
-
       const box = document.createElement("span");
       box.className = "box";
       const label = document.createElement("span");
       label.className = "name";
-      label.textContent = o.name;
-      const p = document.createElement("span");
-      p.className = "pct";
-      p.textContent = pct + "% · " + o.count;
-
-      b.append(bar, box, label, p);
-      b.addEventListener("click", () => toggle(t.topic, o.name));
+      label.textContent = name;
+      b.append(box, label);
+      b.addEventListener("click", () => toggle(t.topic, name));
       sec.append(b);
     });
     app.append(sec);
   });
 }
+
+function renderResults() {
+  app.innerHTML = "";
+  const ballots = Object.keys(poll.voters).reduce((s, k) => s + poll.voters[k], 0);
+  let totalVotes = 0;
+  Object.keys(poll.counts).forEach(t => Object.keys(poll.counts[t]).forEach(o => totalVotes += poll.counts[t][o]));
+
+  const stats = document.createElement("div");
+  stats.className = "stats";
+  [[ballots, "ballots submitted"], [totalVotes, "total picks"]].forEach(s => {
+    const d = document.createElement("div");
+    d.className = "stat";
+    const b = document.createElement("b"); b.textContent = s[0];
+    const sp = document.createElement("span"); sp.textContent = s[1];
+    d.append(b, sp);
+    stats.append(d);
+  });
+  app.append(stats);
+
+  const fills = [];
+  TOPICS.forEach(t => {
+    const voters = poll.voters[t.topic] || 0;
+    const mine = poll.mine[t.topic] || [];
+    const list = t.options.map((name, i) => ({
+      name: name, i: i, count: (poll.counts[t.topic] || {})[name] || 0
+    })).sort((a, b) => b.count - a.count || a.i - b.i);
+
+    const sec = document.createElement("section");
+    sec.className = "topic";
+    const head = document.createElement("div");
+    head.className = "rhead";
+    const h2 = document.createElement("h2"); h2.textContent = t.topic;
+    const sm = document.createElement("small");
+    sm.textContent = voters + (voters === 1 ? " voter" : " voters");
+    head.append(h2, sm);
+    sec.append(head);
+
+    let rank = 0, prev = null;
+    list.forEach((o, idx) => {
+      if (o.count !== prev) { rank = idx + 1; prev = o.count; }
+      const pct = voters ? Math.round((o.count / voters) * 100) : 0;
+      const row = document.createElement("div");
+      row.className = "row" + (o.count === 0 ? " zero" : (rank <= 3 ? " r" + rank : ""));
+
+      const rk = document.createElement("div");
+      rk.className = "rank";
+      rk.textContent = o.count ? rank : "–";
+
+      const nm = document.createElement("div");
+      nm.className = "rname";
+      nm.textContent = o.name;
+      if (mine.indexOf(o.name) !== -1) {
+        const y = document.createElement("span");
+        y.className = "you"; y.textContent = "your pick";
+        nm.append(y);
+      }
+
+      const num = document.createElement("div");
+      num.className = "rnum";
+      const nb = document.createElement("b"); nb.textContent = pct + "%";
+      const ns = document.createElement("span"); ns.textContent = o.count + (o.count === 1 ? " vote" : " votes");
+      num.append(nb, ns);
+
+      const track = document.createElement("div");
+      track.className = "track";
+      const fill = document.createElement("div");
+      fill.className = "fill";
+      track.append(fill);
+      fills.push([fill, pct]);
+
+      row.append(rk, nm, num, track);
+      sec.append(row);
+    });
+    app.append(sec);
+  });
+
+  const rf = document.createElement("button");
+  rf.className = "refresh"; rf.type = "button"; rf.textContent = "Refresh now";
+  rf.addEventListener("click", () => refreshResults(true));
+  app.append(rf);
+
+  // animate bars in after first paint
+  requestAnimationFrame(() => requestAnimationFrame(() => fills.forEach(f => { f[0].style.width = f[1] + "%"; })));
+}
+
+async function refreshResults(manual) {
+  if (!showResults) return;
+  try {
+    if (manual) setStatus("Refreshing…");
+    const res = await fetch(SCRIPT_URL + "?voterId=" + encodeURIComponent(voterId));
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    poll = data;
+    if (showResults) render();
+    if (manual) setStatus("");
+  } catch (e) { if (manual) setStatus("Couldn't refresh.", true); }
+}
+setInterval(() => { if (showResults && !document.hidden && !submitBtn.disabled) refreshResults(false); }, 20000);
 
 function toggle(topic, option) {
   const sel = picks[topic];
@@ -239,7 +351,12 @@ function toggle(topic, option) {
   render();
 }
 
-toggleBtn.addEventListener("click", () => { showResults = !showResults; render(); });
+toggleBtn.addEventListener("click", () => {
+  showResults = !showResults;
+  setStatus("");
+  render();
+  if (showResults) refreshResults(false);
+});
 
 submitBtn.addEventListener("click", async () => {
   const votes = {};
